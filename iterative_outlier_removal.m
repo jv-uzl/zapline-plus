@@ -26,6 +26,7 @@ end
 
 threshold_old = max(data_vector);
 threshold = mean(data_vector)+sd_level*std(data_vector);
+%threshold = median(data_vector)+sd_level*mad(data_vector,1)*1.4826;
 n_remove = 0;
 
 while threshold < threshold_old
@@ -38,4 +39,5 @@ while threshold < threshold_old
     
     threshold_old = threshold;
 	threshold = mean(data_vector)+sd_level*std(data_vector);
+    %threshold = median(data_vector)+sd_level*mad(data_vector,1)*1.4826;
 end
