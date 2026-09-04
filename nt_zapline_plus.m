@@ -135,10 +135,13 @@ if p.adaptiveNremove == 1
 %   elbow detection does not work very well because the elbow is more
 % 	significant for noisier datasets which means that clean datasets get more components removed which defeats the
 % 	purpose
-    
     [adaptiveNremove, ~] = iterative_outlier_removal(scores,p.noiseCompDetectSigma);
 %     fprintf('Adaptive score outlier detection found %d components to remove. This does not reduce the data rank!\n',adaptiveNremove);
     
+    % JV alternatively, use median criteria?
+    %idx_remove = scores > median(scores)+p.noiseCompDetectSigma*mad(scores,1)*1.4826;
+    %adaptiveNremove = sum(idx_remove);
+
     if adaptiveNremove<nremove
         fprintf('Fixed nremove (%d) is larger than adaptive nremove, using fixed nremove!\n',nremove);
     else

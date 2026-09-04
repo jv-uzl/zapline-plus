@@ -320,7 +320,6 @@ if ~isempty(flat_channels_idx)
 end
 
 cleanData = data;
-
 disp('Computing initial spectrum...')
 % compute spectrum with frequency resolution of winSizeCompleteSpectrum
 [pxx_raw_log,f]=pwelch(data,hanning(winSizeCompleteSpectrum*srate),[],[],srate);
@@ -378,12 +377,11 @@ if strcmp(noisefreqs,'line')
     % Find out the frequency: first, relate the spectral data chunk's
     % indices to the actual frequency indices, then index based on this
     % vector
-    f_spectraChunk_allChans = f(find(idx));
+    f_spectraChunk_allChans = f(idx);
     noisefreqs_candidate = f_spectraChunk_allChans(fIdx_max);
     
     % P.S. for multiple maximum values, the method anove will always return
     % the first maximum value, thus one less potential bug
-    
     fprintf('"noisefreqs" parameter was set to ''line'', found line noise candidate at %g Hz!\n',noisefreqs_candidate);
     
     noisefreqs = [];
@@ -463,17 +461,6 @@ while i_noisefreq <= length(noisefreqs)
         [pks,locs,widths,proms] = findpeaks(distances);
         [pks,locs] = findpeaks(distances,'MinPeakProminence',quantile(proms,prominenceQuantile),'MinPeakDistance',minChunkLength);
         
-        %% plot
-        
-%         figure('color','w');
-%         plot(distances)
-%         
-%         hold on
-%         
-%         l = plot(locs,pks,'ko')
-%         title('noise narrowband covariance matrix distances')
-%         legend(l,'chunk segmentations')
-%         xlabel('time [seconds]')
         
         %% create final chunk indices
         
@@ -605,15 +592,6 @@ while i_noisefreq <= length(noisefreqs)
                 noisePeaks(iChunk) = noisefreq;
             end
             
-            %             figure; plot(f,mean(pxx_chunk,2));
-            %             xlim([f(find(this_freq_idx,1,'first')) f(find(this_freq_idx,1,'last'))])
-            %             hold on
-            %             plot([f(find(this_freq_idx_detailed,1,'first')) f(find(this_freq_idx_detailed,1,'last'))],...
-            %                 [detailedNoiseThresh detailedNoiseThresh],'r')
-            %             plot(xlim,[center_thisdata center_thisdata])
-            %             plot(xlim,[mean_lower_quantile_thisdata mean_lower_quantile_thisdata])
-            %             title(['chunk ' num2str(iChunk) ', ' num2str(noisePeaks(iChunk))])
-            
             % needs to be normalized for zapline
             f_noise = noisePeaks(iChunk)/srate;
             
@@ -623,12 +601,6 @@ while i_noisefreq <= length(noisefreqs)
                 nt_zapline_plus(chunk,f_noise,thisFixedNremove,this_zaplineConfig_chunk,0);
             
             scores(iChunk,1:length(thisScores)) = thisScores;
-            
-            %             [pxx_chunk,f]=pwelch(cleanData(chunkIndices,:),hanning(length(chunk)),[],[],srate);
-            %             pxx_chunk = 10*log10(pxx_chunk);
-            %             figure; plot(f,mean(pxx_chunk,2));
-            %             xlim([f(find(this_freq_idx,1,'first')) f(find(this_freq_idx,1,'last'))])
-            %             title(['chunk ' num2str(iChunk) ', ' num2str(noisePeaks(iChunk)) ', ' num2str(NremoveFinal(iChunk)) ' removed'])
             
             % add flat channels back in
             if ~isempty(flat_channels_idx_chunk)
