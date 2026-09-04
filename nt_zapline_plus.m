@@ -18,6 +18,9 @@ function [y,yy,nremove,scores]=nt_zapline_plus(x,fline,nremove,p,plotflag)
 %    p.adaptiveNremove: use adaptive detection method of artifact scores for
 %		removal instead of predefined nremove. cannot remove more than 1/5th of the components!
 %    p.noiseCompDetectSigma: sigma threshold for automatic iterative outlier detection [default: 3]
+%    p.noiseFreqWindow:  window around target frequency for band-pass filtering to be used with nt_bias_fft
+%                   [default: [0,0], i.e., only use target frequency, alternative: [-0.1, 0.1]]
+%    p.nHarmonics: (maximal) number of harmonics to consider
 %  plotflag: plot
 %
 %Examples:
@@ -48,7 +51,13 @@ if ~isfield(p,'fig1'); p.fig1=100; end
 if ~isfield(p, 'fig2'); p.fig2=101; end
 if ~isfield(p, 'adaptiveNremove'); p.adaptiveNremove=1; end
 if ~isfield(p, 'noiseCompDetectSigma'); p.noiseCompDetectSigma=3; end
+if ~isfield(p, 'noiseFreqWindow'); p.noiseFreqWindow = 0; end
+if ~isfield(p, 'nHarmonics'); p.nHarmonics = Inf; end
 if nargin<5||isempty(plotflag); plotflag=0; end
+
+if isscalar(p.noiseFreqWindow)
+    p.noiseFreqWindow = p.noiseFreqWindow * [-1, 1];
+end
 
 if isempty(x); error('!'); end
 if nremove>=size(x,1); error('!'); end
@@ -100,13 +109,17 @@ if ~nargout
     return
 end
 
-xx=nt_smooth(x,1/fline,p.niterations); % cancels line_frequency and harmonics, light lowpass
+x_smoothed=nt_smooth(x,1/fline,p.niterations); % cancels line_frequency and harmonics, light lowpass
 if isempty(p.nkeep); p.nkeep=size(x,2); end
-xxxx=nt_pca(x-xx,[],p.nkeep); % reduce dimensionality to avoid overfitting
+x_resid = x-x_smoothed;
+x_resid_orth=nt_pca(x_resid,[],p.nkeep); % reduce dimensionality to avoid overfitting
 
 % DSS to isolate line components from residual:
-nHarmonics=floor((1/2)/fline);
-[c0,c1]=nt_bias_fft(xxxx,fline*(1:nHarmonics), p.nfft);
+nHarmonics=min(floor((1/2)/fline), p.nHarmonics);
+fline_ivals = fline*(1:nHarmonics)+ p.noiseFreqWindow(:);
+%fline_ivals = (fline+p.noiseFreqWindow(:))*(1:nHarmonics);
+fline_ivals = min(fline_ivals,0.5);
+[c0,c1]=nt_bias_fft(x_resid_orth,fline_ivals, p.nfft);
 
 [todss,pwr0,pwr1]=nt_dss0(c0,c1);
 scores = pwr1./pwr0; %%% MK
@@ -140,14 +153,18 @@ if p.adaptiveNremove == 1
 end
 
 
-if nremove>0
-    
-    xxxx=nt_mmat(xxxx,todss(:,1:nremove)); % line-dominated components
-    xxx=nt_tsr(x-xx,xxxx); % project them out
-    clear xxxx
+%JV we got an error here in some data sets: 
+%   nremove was larger than size(todss,2) (2 vs. 1). 
+%   as a quick fix, we restrict nremove to size(todss, 2)
+nremove = min(nremove, size(todss, 2)); %JV bugfix
+
+if nremove>0 
+    x_resid_line=nt_mmat(x_resid_orth,todss(:,1:nremove)); % line-dominated components
+    x_resid_cleaned=nt_tsr(x_resid,x_resid_line); % project them out
+    clear x_resid_orth
 
     % reconstruct clean signal
-    y=xx+xxx; clear xx xxx
+    y=x_smoothed+x_resid_cleaned; 
 
 else
     y = x;
