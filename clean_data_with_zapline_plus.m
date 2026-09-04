@@ -82,6 +82,10 @@
 %   overwritePlot                   - bool if plot should be overwritten. if not, figbase will be increased by 100 until
 %                                       no figure exists (default = 0)
 %
+%   NOTE: When providing multiple frequencies in noisefreqs, some of the parameters can optionally be provided per
+%         frequency (i.e., as a vector): searchIndividualNoise, fixedNremove, adaptiveNremove, detectionWinsize
+%                                        and nHarmonics
+%   
 %
 % Outputs:
 %
@@ -159,17 +163,17 @@ p.CaseSensitive = false;
 addRequired(p, 'data', @(x) validateattributes(x,{'numeric'},{'2d'},'clean_EEG_with_zapline','data'))
 addRequired(p, 'srate', @(x) validateattributes(x,{'numeric'},{'positive','scalar','integer'},'clean_EEG_with_zapline','srate'))
 addOptional(p, 'noisefreqs', [])%, @(x) validateattributes(x,{'numeric','char'},{},'clean_EEG_with_zapline','noisefreqs')) % for some reason i cant make 'char' work here, it leads to errors in the other parameters
-addOptional(p, 'fixedNremove', 1, @(x) validateattributes(x,{'numeric'},{'integer','scalar'},'clean_EEG_with_zapline','fixedNremove'));
+addOptional(p, 'fixedNremove', 1, @(x) validateattributes(x,{'numeric'},{'integer','vector'},'clean_EEG_with_zapline','fixedNremove'));
 addOptional(p, 'minfreq', 17, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','minfreq'))
 addOptional(p, 'maxfreq', 99, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','maxfreq'))
-addOptional(p, 'detectionWinsize', 6, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','detectionWinsize'))
+addOptional(p, 'detectionWinsize', 6, @(x) validateattributes(x,{'numeric'},{'positive','vector'},'clean_EEG_with_zapline','detectionWinsize'))
 addOptional(p, 'coarseFreqDetectPowerDiff', 4, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','coarseFreqDetectPowerDiff'))
 addOptional(p, 'coarseFreqDetectLowerPowerDiff', 1.76091259055681, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','coarseFreqDetectLowerPowerDiff'))
-addOptional(p, 'searchIndividualNoise', 1, @(x) validateattributes(x,{'numeric','logical'},{'scalar','binary'},'clean_EEG_with_zapline','searchIndividualNoise'));
+addOptional(p, 'searchIndividualNoise', 1, @(x) validateattributes(x,{'numeric','logical'},{'vector','binary'},'clean_EEG_with_zapline','searchIndividualNoise'));
 addOptional(p, 'freqDetectMultFine', 2, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','freqDetectMultFine'))
 addOptional(p, 'maxProportionAboveUpper', 0.005, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','maxProportionAboveUpper'))
 addOptional(p, 'maxProportionBelowLower', 0.005, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','maxProportionBelowLower'))
-addOptional(p, 'adaptiveNremove', 1, @(x) validateattributes(x,{'numeric','logical'},{'scalar','binary'},'clean_EEG_with_zapline','adaptiveNremove'));
+addOptional(p, 'adaptiveNremove', 1, @(x) validateattributes(x,{'numeric','logical'},{'vector','binary'},'clean_EEG_with_zapline','adaptiveNremove'));
 addOptional(p, 'noiseCompDetectSigma', 3, @(x) validateattributes(x,{'numeric'},{'scalar','positive'},'clean_EEG_with_zapline','noiseCompDetectSigma'));
 addOptional(p, 'adaptiveSigma', 1, @(x) validateattributes(x,{'numeric','logical'},{'scalar','binary'},'clean_EEG_with_zapline','adaptiveSigma'));
 addOptional(p, 'minsigma', 2.5, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','minsigma'))
@@ -192,42 +196,56 @@ addOptional(p, 'detrendSpectrum', 0, @(x) validateattributes(x,{'numeric'},{'sca
 addOptional(p, 'chunkIndices', [], @(x) validateattributes(x,{'numeric'},{'2d'},'clean_EEG_with_zapline','chunkIndices'));
 addOptional(p, 'noiseFreqWindow', [], @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','noiseFreqWindow'));
 addOptional(p, 'minNoiseDelta', 0, @(x) validateattributes(x,{'numeric'},{'scalar', 'positive'},'clean_EEG_with_zapline','minNoiseDelta'));
-addOptional(p, 'nHarmonics', Inf, @(x) validateattributes(x,{'numeric'},{'scalar', 'integer'},'clean_EEG_with_zapline','nHarmonics'));
+addOptional(p, 'nHarmonics', Inf, @(x) validateattributes(x,{'numeric'},{'vector', 'integer'},'clean_EEG_with_zapline','nHarmonics'));
 
 
 % parse the input
 parse(p,data,srate,varargin{:});
 
-data = p.Results.data;
-srate = p.Results.srate;
-noisefreqs = p.Results.noisefreqs;
-coarseFreqDetectPowerDiff = p.Results.coarseFreqDetectPowerDiff;
-coarseFreqDetectLowerPowerDiff = p.Results.coarseFreqDetectLowerPowerDiff;
-searchIndividualNoise = p.Results.searchIndividualNoise;
-freqDetectMultFine = p.Results.freqDetectMultFine;
-maxProportionAboveUpper = p.Results.maxProportionAboveUpper;
-maxProportionBelowLower = p.Results.maxProportionBelowLower;
-adaptiveNremove = p.Results.adaptiveNremove;
-minfreq = p.Results.minfreq;
-maxfreq = p.Results.maxfreq;
-detectionWinsize = p.Results.detectionWinsize;
-adaptiveSigma = p.Results.adaptiveSigma;
-minSigma = p.Results.minsigma;
-maxSigma = p.Results.maxsigma;
-fixedNremove = p.Results.fixedNremove;
-chunkLength = p.Results.chunkLength;
-winSizeCompleteSpectrum = p.Results.winSizeCompleteSpectrum;
-detailedFreqBoundsUpper = p.Results.detailedFreqBoundsUpper;
-detailedFreqBoundsLower = p.Results.detailedFreqBoundsLower;
-nkeep = p.Results.nkeep;
-plotResults = p.Results.plotResults;
-figBase = p.Results.figBase;
-figPos = p.Results.figPos;
-overwritePlot = p.Results.overwritePlot;
-segmentLength = p.Results.segmentLength;
-minChunkLength = p.Results.minChunkLength;
-prominenceQuantile = p.Results.prominenceQuantile;
-saveSpectra = p.Results.saveSpectra;
+pars = p.Results;
+
+% turn some scalars into vectors
+n_freqs = length(pars.noisefreqs);
+if n_freqs > 1
+    scal2vect = {'searchIndividualNoise', 'fixedNremove', 'adaptiveNremove', 'detectionWinsize', 'nHarmonics'};
+    for k = 1:length(scal2vect)
+        vn = scal2vect{k};
+        if isscalar(pars.(vn))
+            pars.(vn) = repmat(pars.(vn), [1, n_freqs]);
+        end
+    end
+end
+
+data = pars.data;
+srate = pars.srate;
+noisefreqs = pars.noisefreqs;
+coarseFreqDetectPowerDiff = pars.coarseFreqDetectPowerDiff;
+coarseFreqDetectLowerPowerDiff = pars.coarseFreqDetectLowerPowerDiff;
+searchIndividualNoise = pars.searchIndividualNoise;
+freqDetectMultFine = pars.freqDetectMultFine;
+maxProportionAboveUpper = pars.maxProportionAboveUpper;
+maxProportionBelowLower = pars.maxProportionBelowLower;
+adaptiveNremove = pars.adaptiveNremove;
+minfreq = pars.minfreq;
+maxfreq = pars.maxfreq;
+detectionWinsize = pars.detectionWinsize;
+adaptiveSigma = pars.adaptiveSigma;
+minSigma = pars.minsigma;
+maxSigma = pars.maxsigma;
+fixedNremove = pars.fixedNremove;
+chunkLength = pars.chunkLength;
+winSizeCompleteSpectrum = pars.winSizeCompleteSpectrum;
+detailedFreqBoundsUpper = pars.detailedFreqBoundsUpper;
+detailedFreqBoundsLower = pars.detailedFreqBoundsLower;
+nkeep = pars.nkeep;
+plotResults = pars.plotResults;
+figBase = pars.figBase;
+figPos = pars.figPos;
+overwritePlot = pars.overwritePlot;
+segmentLength = pars.segmentLength;
+minChunkLength = pars.minChunkLength;
+prominenceQuantile = pars.prominenceQuantile;
+saveSpectra = pars.saveSpectra;
 
 % finalize inputs
 
@@ -266,39 +284,39 @@ if nkeep == 0
 end
 
 % create config struct for zapline, also store any additional input for the record
-zaplineConfig.noisefreqs = p.Results.noisefreqs;
-zaplineConfig.coarseFreqDetectPowerDiff = p.Results.coarseFreqDetectPowerDiff;
-zaplineConfig.coarseFreqDetectLowerPowerDiff = p.Results.coarseFreqDetectLowerPowerDiff;
-zaplineConfig.searchIndividualNoise = p.Results.searchIndividualNoise;
-zaplineConfig.freqDetectMultFine = p.Results.freqDetectMultFine;
-zaplineConfig.maxProportionAboveUpper = p.Results.maxProportionAboveUpper;
-zaplineConfig.maxProportionBelowLower = p.Results.maxProportionBelowLower;
-zaplineConfig.minfreq = p.Results.minfreq;
-zaplineConfig.maxfreq = p.Results.maxfreq;
-zaplineConfig.detectionWinsize = p.Results.detectionWinsize;
-zaplineConfig.adaptiveNremove = p.Results.adaptiveNremove;
-zaplineConfig.adaptiveSigma = p.Results.adaptiveSigma;
-zaplineConfig.minSigma = p.Results.minsigma;
-zaplineConfig.maxSigma = p.Results.maxsigma;
-zaplineConfig.fixedNremove = p.Results.fixedNremove;
-zaplineConfig.noiseCompDetectSigma = p.Results.noiseCompDetectSigma;
+zaplineConfig.noisefreqs = pars.noisefreqs;
+zaplineConfig.coarseFreqDetectPowerDiff = pars.coarseFreqDetectPowerDiff;
+zaplineConfig.coarseFreqDetectLowerPowerDiff = pars.coarseFreqDetectLowerPowerDiff;
+zaplineConfig.searchIndividualNoise = pars.searchIndividualNoise;
+zaplineConfig.freqDetectMultFine = pars.freqDetectMultFine;
+zaplineConfig.maxProportionAboveUpper = pars.maxProportionAboveUpper;
+zaplineConfig.maxProportionBelowLower = pars.maxProportionBelowLower;
+zaplineConfig.minfreq = pars.minfreq;
+zaplineConfig.maxfreq = pars.maxfreq;
+zaplineConfig.detectionWinsize = pars.detectionWinsize;
+zaplineConfig.adaptiveNremove = pars.adaptiveNremove;
+zaplineConfig.adaptiveSigma = pars.adaptiveSigma;
+zaplineConfig.minSigma = pars.minsigma;
+zaplineConfig.maxSigma = pars.maxsigma;
+zaplineConfig.fixedNremove = pars.fixedNremove;
+zaplineConfig.noiseCompDetectSigma = pars.noiseCompDetectSigma;
 zaplineConfig.chunkLength = chunkLength;
 zaplineConfig.winSizeCompleteSpectrum = winSizeCompleteSpectrum;
-zaplineConfig.detailedFreqBoundsUpper = p.Results.detailedFreqBoundsUpper;
-zaplineConfig.detailedFreqBoundsLower = p.Results.detailedFreqBoundsLower;
+zaplineConfig.detailedFreqBoundsUpper = pars.detailedFreqBoundsUpper;
+zaplineConfig.detailedFreqBoundsLower = pars.detailedFreqBoundsLower;
 zaplineConfig.nkeep = nkeep;
 zaplineConfig.segmentLength = segmentLength;
 zaplineConfig.minChunkLength = minChunkLength;
 zaplineConfig.prominenceQuantile = prominenceQuantile;
-zaplineConfig.nfft = p.Results.nfft;  
-zaplineConfig.detrendSpectrum = p.Results.detrendSpectrum;
-zaplineConfig.chunkIndices = p.Results.chunkIndices;
-zaplineConfig.noiseFreqWindow = p.Results.noiseFreqWindow;
+zaplineConfig.nfft = pars.nfft;  
+zaplineConfig.detrendSpectrum = pars.detrendSpectrum;
+zaplineConfig.chunkIndices = pars.chunkIndices;
+zaplineConfig.noiseFreqWindow = pars.noiseFreqWindow;
 if isempty(zaplineConfig.noiseFreqWindow)
     zaplineConfig.noiseFreqWindow = zaplineConfig.detailedFreqBoundsUpper;
 end
-zaplineConfig.nHarmonics = p.Results.nHarmonics;
-zaplineConfig.minNoiseDelta = p.Results.minNoiseDelta;
+zaplineConfig.nHarmonics = pars.nHarmonics;
+zaplineConfig.minNoiseDelta = pars.minNoiseDelta;
 
 
 % initialize results in case no noise frequenc is found
@@ -385,8 +403,8 @@ if strcmp(noisefreqs,'line')
     fprintf('"noisefreqs" parameter was set to ''line'', found line noise candidate at %g Hz!\n',noisefreqs_candidate);
     
     noisefreqs = [];
-    minfreq = noisefreqs_candidate-detectionWinsize/2;
-    maxfreq = noisefreqs_candidate+detectionWinsize/2;
+    minfreq = noisefreqs_candidate-detectionWinsize(1)/2;
+    maxfreq = noisefreqs_candidate+detectionWinsize(1)/2;
     
 end
 
@@ -394,7 +412,7 @@ automaticFreqDetection = isempty(noisefreqs);
 if automaticFreqDetection
     disp(['Searching for first noise frequency between ' num2str(minfreq) ' and ' num2str(maxfreq) 'Hz...'])
     verbose = 0;
-    [noisefreqs,~,~,thresh]=find_next_noisefreq(pxx_raw_log,f,minfreq,coarseFreqDetectPowerDiff,detectionWinsize,maxfreq,...
+    [noisefreqs,~,~,thresh]=find_next_noisefreq(pxx_raw_log,f,minfreq,coarseFreqDetectPowerDiff,detectionWinsize(1),maxfreq,...
         coarseFreqDetectLowerPowerDiff,verbose);
 end
 
@@ -403,7 +421,7 @@ while i_noisefreq <= length(noisefreqs)
     
     noisefreq = noisefreqs(i_noisefreq);
     
-    thisFixedNremove = fixedNremove;
+    thisFixedNremove = fixedNremove(i_noisefreq);
     
     fprintf('Removing noise at %gHz... \n',noisefreq);
     
@@ -427,7 +445,7 @@ while i_noisefreq <= length(noisefreqs)
     else
         disp('Using adaptive chunk length!')
         %% find chunk indices
-        data_narrowfilt = bandpass(data,[noisefreq-detectionWinsize/2 noisefreq+detectionWinsize/2],srate);
+        data_narrowfilt = bandpass(data,noisefreq + detectionWinsize(i_noisefreq) * [-0.5, 0.5],srate);
         
         nSegments = max(floor(size(data_narrowfilt,1)/srate/segmentLength),1);
         
@@ -532,14 +550,14 @@ while i_noisefreq <= length(noisefreqs)
                 chunk(:,flat_channels_idx_chunk) = [];
             end
             
-            if searchIndividualNoise
+            if searchIndividualNoise(i_noisefreq)
                 % compute spectrum with maximal frequency resolution per chunk to detect individual peaks
                 [pxx_chunk,f]=pwelch(chunk,hanning(length(chunk)),[],[],srate);
                 %[pxx_chunk,f]=pwelch(chunk,hanning(this_zaplineConfig_chunk.nfft),[],this_zaplineConfig_chunk.nfft, srate); %JV try
                 
                 pxx_chunk = 10*log10(pxx_chunk);
 
-                thisFreqidx = f>noisefreq-(detectionWinsize/2) & f<noisefreq+(detectionWinsize/2);
+                thisFreqidx = f>noisefreq-(detectionWinsize(i_noisefreq)/2) & f<noisefreq+(detectionWinsize(i_noisefreq)/2);
                 thisFreqs = f (thisFreqidx);
                 this_freq_idx_detailed = f>noisefreq+detailedFreqBoundsUpper(1) & f<noisefreq+detailedFreqBoundsUpper(2);
                 this_freqs_detailed = f(this_freq_idx_detailed);
@@ -597,6 +615,7 @@ while i_noisefreq <= length(noisefreqs)
             
             % apply Zapline
             this_zaplineConfig_chunk.noiseFreqWindow =  this_zaplineConfig_chunk.noiseFreqWindow / srate;
+            this_zaplineConfig_chunk.nHarmonics =  this_zaplineConfig_chunk.nHarmonics(i_noisefreq);
             [cleanData_chunk,~,NremoveFinal(iChunk),thisScores] =...
                 nt_zapline_plus(chunk,f_noise,thisFixedNremove,this_zaplineConfig_chunk,0);
             
@@ -665,8 +684,8 @@ while i_noisefreq <= length(noisefreqs)
         proportionRemovedNoise = 1-10^((mean(pxx_clean_log(this_freq_idx_noise,:),'all') - mean(pxx_raw_log(this_freq_idx_noise,:),'all'))/10);
         disp(['proportion of removed power at noise frequency: ' num2str(proportionRemovedNoise)]);
         
-        this_freq_idx_noise_surrounding = (f>noisefreq-(detectionWinsize/2) & f<noisefreq-(detectionWinsize/6)) |...
-            (f>noisefreq+(detectionWinsize/6) & f<noisefreq+(detectionWinsize/2));
+        this_freq_idx_noise_surrounding = (f>noisefreq-(detectionWinsize(i_noisefreq)/2) & f<noisefreq-(detectionWinsize(i_noisefreq)/6)) |...
+            (f>noisefreq+(detectionWinsize(i_noisefreq)/6) & f<noisefreq+(detectionWinsize(i_noisefreq)/2));
         
         ratioNoiseRaw = 10^((mean(mean(pxx_raw_log(this_freq_idx_noise,:),2)) - mean(pxx_raw_log(this_freq_idx_noise_surrounding,:),'all'))/10);
         ratioNoiseClean = 10^((mean(mean(pxx_clean_log(this_freq_idx_noise,:),2)) - mean(pxx_clean_log(this_freq_idx_noise_surrounding,:),'all'))/10);
@@ -681,7 +700,7 @@ while i_noisefreq <= length(noisefreqs)
         % determine center power by checking lower and upper third around noise freq, then check detailed lower and
         % upper threhsold. search area for weak is around the noisefreq, for strong its larger and a little below the
         % noisefreq because zapline makes a dent there
-        thisFreqidx = f>noisefreq-(detectionWinsize/2) & f<noisefreq+(detectionWinsize/2);
+        thisFreqidx = f>noisefreq-(detectionWinsize(i_noisefreq)/2) & f<noisefreq+(detectionWinsize(i_noisefreq)/2);
         thisFreqidxUppercheck = f>noisefreq+detailedFreqBoundsUpper(1) & f<noisefreq+detailedFreqBoundsUpper(2);
         thisFreqidxLowercheck = f>noisefreq+detailedFreqBoundsLower(1) & f<noisefreq+detailedFreqBoundsLower(2);
         
@@ -796,7 +815,7 @@ while i_noisefreq <= length(noisefreqs)
             
             for i_chunk = 1:size(chunkIndicesPlot,1)
 
-                if ~searchIndividualNoise || foundNoise(i_chunk)
+                if ~searchIndividualNoise(i_noisefreq) || foundNoise(i_chunk)
                     current_col = grey; 
                 else
                     current_col = green;
@@ -839,7 +858,7 @@ while i_noisefreq <= length(noisefreqs)
             ylim([noisefreq-maxdiff*1.5 noisefreq+maxdiff*1.5])
             xlabel('time [minutes]')
             title({['individual peak frequencies [Hz]']})
-            if searchIndividualNoise
+            if searchIndividualNoise(i_noisefreq)
                 foundNoisePlot = foundNoise;
                 foundNoisePlot(foundNoisePlot==1) = NaN;
                 foundNoisePlot(~isnan(foundNoisePlot)) = noisePeaks(~isnan(foundNoisePlot));
@@ -860,7 +879,7 @@ while i_noisefreq <= length(noisefreqs)
             hold on
             meanremovedhandle = plot([mean(NremoveFinal)+1 mean(NremoveFinal)+1],ylim,'color',red);
             xlim([0.7 round(size(scores,2)/3)])
-            if adaptiveNremove
+            if adaptiveNremove(i_noisefreq)
                 title({'mean artifact scores [a.u.]', ['\sigma for detection = ' num2str(thisZaplineConfig.noiseCompDetectSigma)]})
             else
                 title({'mean artifact scores [a.u.]'})
@@ -991,7 +1010,7 @@ while i_noisefreq <= length(noisefreqs)
         
         cleaningDone = 1;
         
-        if adaptiveNremove && adaptiveSigma
+        if adaptiveNremove(i_noisefreq) && adaptiveSigma
             if cleaningTooStrong && thisZaplineConfig.noiseCompDetectSigma < maxSigma
                 cleaningTooStongOnce = 1;
                 thisZaplineConfig.noiseCompDetectSigma = min(thisZaplineConfig.noiseCompDetectSigma + 0.25,maxSigma);
@@ -1034,7 +1053,7 @@ while i_noisefreq <= length(noisefreqs)
         disp(['Searching for first noise frequency between ' num2str(noisefreqs(i_noisefreq)+detailedFreqBoundsUpper(2)) ' and ' num2str(maxfreq) 'Hz...'])
         
         [nextfreq,~,~,thresh] = find_next_noisefreq(pxx_clean_log,f,...
-            noisefreqs(i_noisefreq)+detailedFreqBoundsUpper(2),coarseFreqDetectPowerDiff,detectionWinsize,maxfreq,...
+            noisefreqs(i_noisefreq)+detailedFreqBoundsUpper(2),coarseFreqDetectPowerDiff,detectionWinsize(i_noisefreq),maxfreq,...
             coarseFreqDetectLowerPowerDiff,verbose);
         if ~isempty(nextfreq)
             noisefreqs(end+1)=nextfreq;
