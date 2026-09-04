@@ -1015,7 +1015,7 @@ while i_noisefreq <= length(noisefreqs)
                 cleaningTooStongOnce = 1;
                 thisZaplineConfig.noiseCompDetectSigma = min(thisZaplineConfig.noiseCompDetectSigma + 0.25,maxSigma);
                 cleaningDone = 0;
-                thisFixedNremove = max(thisFixedNremove-1,fixedNremove);
+                thisFixedNremove = max(thisFixedNremove-1,fixedNremove(i_noisefreq));
                 disp(['Cleaning too strong! Increasing sigma for noise component detection to '...
                     num2str(thisZaplineConfig.noiseCompDetectSigma) ' and setting minimum number of removed components to '...
                     num2str(thisFixedNremove) '.'])
