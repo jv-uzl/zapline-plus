@@ -23,7 +23,7 @@ We address this by introducing two features, specified by two parameters,
 We address this with a new feature and parameters: 
 
 - `detrendSpectrum`: Set to 0 to use original version; set to > 0 to use polynomial fit of that order to estimate "slow trend" and residuals of spectrum around the target frequencies. These are then used to define thresholds both for peak detection and post-cleaning checking. 
-- `minNoiseDelta`: If the spectral power varies very little across frequencies around the target frequency, it may be desirable to introduce a minimal deviation for computing the "below" and "above" thresholds. This can be done by setting this parameter > 0 (e.g., a value of 0.5 dB corresponds to a minimal power ratio for thresholds of about $10 ^0.05 \approx 1.12$, i.e., around +/- 10%).
+- `minNoiseDelta`: If the spectral power varies very little across frequencies around the target frequency, it may be desirable to introduce a minimal deviation for computing the "below" and "above" thresholds. This can be done by setting this parameter > 0 (e.g., a value of 0.5 dB corresponds to a minimal power ratio for thresholds of about $10 ^{0.05} \approx 1.12$, i.e., around +/- 10%).
 
 3) It may be desirable to use different parameters for different noise frequencies. This is now possible by providing a vector of values (same length as `noisefreqs`) rather than a single value for the following parameters: `searchIndividualNoise, fixedNremove, adaptiveNremove, detectionWinsize, nHarmonics`
 
