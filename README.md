@@ -33,11 +33,13 @@ We address this with a new feature and parameters:
 - `chunkIndices`: Instead of relying on the automatich chunking, it may be desirable to specify chunks to correspond to experimental blocks, ignoring breaks between blocks, or excluding DCC artefacts from the analysis. This can be dones using this parameter, provided either as a list (with chunk breaks) or a Nx2 matrix (chunk start and end in each row). [TODO: this could be extended by allowing automated chunking respecting the suppolied chunk boundaries; also, exclusion of parts segments is not yet handled by the post-cleaning check, which always computes the spectrum on the entire data set]
 
 
-## TODO 
+## Further ideas
 
 - Refactor `clean_data_with_zapline_plus.m`, to clarify structure and remove redundancies 
 - Respect epoch structure, allow ignoring parts, etc. (take into account also for "whole-dataset FFT")
 - Replace `nHarmonics` by alternative option to specify as list of harmonics to take into account (e.g., only odd ones: [1, 3, 5, ...]).
+- Quite often, removing the 25 Hz-assocoiated components with zapline, also reduces power in the typical artifact components (odd harmonics of 5 Hz). Would it make sense to either enforce a minimal number of components for 25 Hz, or have an additional criterion, centered at, say, 5 and 35 Hz?
+- Or might it make sense to combine 24.96... and 50 Hz in one removal operation in `nt_zapline_plus` and `nt_bias_fft`? With the hope to capture also the interaction noise between the two?
 
 # Quick start
 

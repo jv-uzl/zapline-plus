@@ -196,7 +196,7 @@ addOptional(p, 'detrendSpectrum', 0, @(x) validateattributes(x,{'numeric'},{'sca
 addOptional(p, 'chunkIndices', [], @(x) validateattributes(x,{'numeric'},{'2d'},'clean_EEG_with_zapline','chunkIndices'));
 addOptional(p, 'noiseFreqWindow', [], @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','noiseFreqWindow'));
 addOptional(p, 'minNoiseDelta', 0, @(x) validateattributes(x,{'numeric'},{'scalar', 'positive'},'clean_EEG_with_zapline','minNoiseDelta'));
-addOptional(p, 'nHarmonics', Inf, @(x) validateattributes(x,{'numeric'},{'vector', 'integer'},'clean_EEG_with_zapline','nHarmonics'));
+addOptional(p, 'nHarmonics', Inf, @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','nHarmonics'));
 
 
 % parse the input
