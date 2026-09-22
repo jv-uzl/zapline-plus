@@ -21,6 +21,11 @@ function [y,yy,nremove,scores]=nt_zapline_plus(x,fline,nremove,p,plotflag)
 %    p.noiseFreqWindow:  window around target frequency for band-pass filtering to be used with nt_bias_fft
 %                   [default: [0,0], i.e., only use target frequency, alternative: [-0.1, 0.1]]
 %    p.nHarmonics: (maximal) number of harmonics to consider
+%    p.harmonics: list of harmonics. Defaults to empty. If empty, it is filled according to
+%                 p.nHarmonics. If non-empty, it is taken as is, only cut off at Nyquist. 
+%    p.biasfreq: list of bias frequencies to take into account in nt_bias_fft. all normalized to
+%                sr. this allows for the spatial filtering to also take into account
+%                power at frequencies apart from fline and harmonics.
 %  plotflag: plot
 %
 %Examples:
@@ -53,6 +58,9 @@ if ~isfield(p, 'adaptiveNremove'); p.adaptiveNremove=1; end
 if ~isfield(p, 'noiseCompDetectSigma'); p.noiseCompDetectSigma=3; end
 if ~isfield(p, 'noiseFreqWindow'); p.noiseFreqWindow = 0; end
 if ~isfield(p, 'nHarmonics'); p.nHarmonics = Inf; end
+if ~isfield(p, 'harmonics'); p.harmonics = []; end
+if ~isfield(p, 'biasfreq'); p.biasfreq = []; end
+
 if nargin<5||isempty(plotflag); plotflag=0; end
 
 if isscalar(p.noiseFreqWindow)
@@ -64,6 +72,7 @@ if nremove>=size(x,1); error('!'); end
 if fline>1/2; error('fline should be less than Nyquist'); end
 if size(x,1)<p.nfft; warning(['reducing nfft to ',num2str(size(x,1))]); p.nfft=size(x,1); end
 
+%JV: I don't know what this is good for...
 if ~nargout || plotflag
     % print result and display spectra
     [y,yy,nremove,scores]=nt_zapline_plus(x,fline,nremove,p); %%% MK added outputs
@@ -115,10 +124,21 @@ x_resid = x-x_smoothed;
 x_resid_orth=nt_pca(x_resid,[],p.nkeep); % reduce dimensionality to avoid overfitting
 
 % DSS to isolate line components from residual:
-nHarmonics=min(floor((1/2)/fline), p.nHarmonics);
-fline_ivals = fline*(1:nHarmonics)+ p.noiseFreqWindow(:);
-%fline_ivals = (fline+p.noiseFreqWindow(:))*(1:nHarmonics);
-fline_ivals = min(fline_ivals,0.5);
+n_nyquist = floor((1/2)/fline);
+if ~isempty(p.biasfreq)
+   biasfreq = p.biasfreq(p.biasfreq < 0.5);
+elseif ~isempty(p.harmonics) 
+   harmonics = p.harmonics(p.harmonics < f_nyquist);
+   biasfreq = harmonics*fline;
+else
+   nHarmonics=min(f_nyquist, p.nHarmonics);
+   harmonics = 1:nHarmonics;
+   biasfreq = harmonics*fline;
+end
+fline_ivals = biasfreq+ p.noiseFreqWindow(:);  % keep width at higher freq
+%fline_ivals = (fline+p.noiseFreqWindow(:))*harmonics; %TODO:  broader width at higher freq
+%fline_ivals = (fline+p.noiseFreqWindow(:))*harmonics; %TODO:  broader width at higher freq
+fline_ivals = min(fline_ivals,0.499);
 [c0,c1]=nt_bias_fft(x_resid_orth,fline_ivals, p.nfft);
 
 [todss,pwr0,pwr1]=nt_dss0(c0,c1);
