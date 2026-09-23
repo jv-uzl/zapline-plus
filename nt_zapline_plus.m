@@ -128,16 +128,15 @@ n_nyquist = floor((1/2)/fline);
 if ~isempty(p.biasfreq)
    biasfreq = p.biasfreq(p.biasfreq < 0.5);
 elseif ~isempty(p.harmonics) 
-   harmonics = p.harmonics(p.harmonics < f_nyquist);
+   harmonics = p.harmonics(p.harmonics < n_nyquist);
    biasfreq = harmonics*fline;
 else
-   nHarmonics=min(f_nyquist, p.nHarmonics);
+   nHarmonics=min(n_nyquist, p.nHarmonics);
    harmonics = 1:nHarmonics;
    biasfreq = harmonics*fline;
 end
 fline_ivals = biasfreq+ p.noiseFreqWindow(:);  % keep width at higher freq
-%fline_ivals = (fline+p.noiseFreqWindow(:))*harmonics; %TODO:  broader width at higher freq
-%fline_ivals = (fline+p.noiseFreqWindow(:))*harmonics; %TODO:  broader width at higher freq
+%fline_ivals = biasfreq + p.noiseFreqWindow(:) .* (biasfreq/fline); % width proportional to frequency
 fline_ivals = min(fline_ivals,0.499);
 [c0,c1]=nt_bias_fft(x_resid_orth,fline_ivals, p.nfft);
 
