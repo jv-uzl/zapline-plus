@@ -19,7 +19,8 @@ function [y,yy,nremove,scores]=nt_zapline_plus(x,fline,nremove,p,plotflag)
 %		removal instead of predefined nremove. cannot remove more than 1/5th of the components!
 %    p.noiseCompDetectSigma: sigma threshold for automatic iterative outlier detection [default: 3]
 %    p.noiseFreqWindow:  window around target frequency for band-pass filtering to be used with nt_bias_fft
-%                   [default: [0,0], i.e., only use target frequency, alternative: [-0.1, 0.1]]
+%                        normalized to sr!  
+%                        [default: [0,0], i.e., only use target frequency, alternative: [-0.01, 0.01]]
 %    p.nHarmonics: (maximal) number of harmonics to consider
 %    p.harmonics: list of harmonics. Defaults to empty. If empty, it is filled according to
 %                 p.nHarmonics. If non-empty, it is taken as is, only cut off at Nyquist. 
