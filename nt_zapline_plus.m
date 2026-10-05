@@ -27,6 +27,7 @@ function [y,yy,nremove,scores]=nt_zapline_plus(x,fline,nremove,p,plotflag)
 %    p.biasfreq: list of bias frequencies to take into account in nt_bias_fft. all normalized to
 %                sr. this allows for the spatial filtering to also take into account
 %                power at frequencies apart from fline and harmonics.
+%    p.cancelfreq: frequency which should be "canceled" for smoothing. Defaults to fline. normalized by sr.
 %  plotflag: plot
 %
 %Examples:
@@ -61,11 +62,16 @@ if ~isfield(p, 'noiseFreqWindow'); p.noiseFreqWindow = 0; end
 if ~isfield(p, 'nHarmonics'); p.nHarmonics = Inf; end
 if ~isfield(p, 'harmonics'); p.harmonics = []; end
 if ~isfield(p, 'biasfreq'); p.biasfreq = []; end
+if ~isfield(p, 'cancelfreq'); p.cancelfreq = []; end
 
 if nargin<5||isempty(plotflag); plotflag=0; end
 
 if isscalar(p.noiseFreqWindow)
     p.noiseFreqWindow = p.noiseFreqWindow * [-1, 1];
+end
+
+if isempty(p.cancelfreq)
+    p.cancelfreq = fline;
 end
 
 if isempty(x); error('!'); end
@@ -119,7 +125,7 @@ if ~nargout
     return
 end
 
-x_smoothed=nt_smooth(x,1/fline,p.niterations); % cancels line_frequency and harmonics, light lowpass
+x_smoothed=nt_smooth(x,1/p.cancelfreq,p.niterations); % cancels line_frequency and harmonics, light lowpass
 if isempty(p.nkeep); p.nkeep=size(x,2); end
 x_resid = x-x_smoothed;
 x_resid_orth=nt_pca(x_resid,[],p.nkeep); % reduce dimensionality to avoid overfitting

@@ -27,6 +27,8 @@
 %   adaptiveNremove                 - bool. if automatic adaptation of number of removed components should be used. (default = 1)
 %   fixedNremove                    - fixed number of removed components. if adaptive removal is used, this will be the
 %                                       minimum. Will be automatically adapted if "adaptiveSigma" is set to 1. (default = 1)
+%   forceFreqRemove                 - whether zapline should even be applied when no noise peak is found 
+%                                     (only applies if fixedNremove = 0)
 %   minfreq                         - minimum frequency to be considered as noise when searching for noise freqs automatically.
 %                                       (default = 17)
 %   maxfreq                         - maximum frequency to be considered as noise when searching for noise freqs automatically.
@@ -48,7 +50,7 @@
 %                                       (default = [-0.4 0.1])
 %   maxProportionAboveUpper         - proportion of frequency samples that may be above the upper threshold before
 %                                       cleaning is adapted. (default = 0.005)
-%   maxProportionBelowLower         - proportion of frequency samples that may be above the lower threshold before
+%   maxProportionBelowLower         - proportion of frequency samples that may be below the lower threshold before
 %                                       cleaning is adapted. (default = 0.005)
 %   noiseCompDetectSigma            - initial sigma threshold for iterative outlier detection of noise components to be
 %                                       removed. Will be automatically adapted if "adaptiveSigma" is set to 1 (default = 3)
@@ -71,10 +73,17 @@
 %                                     (default: 0, i.e., no removal, as in original version by Klug & Kloosterman;
 %                                      set to 1 to remove linear trend, which may be fine in most cases.
 %                                      set to 2 or higher to remove non-linear trends)
+%   checkSpectrumReference          - Whether to compare the cleaned spectral data at the target frequency to mean and lower quantile of raw
+%                                     or cleaned surrounding frequencies. Original default: 'cleaned', new default: 'raw'. Should not matter 
+%                                     if cleaning is highly frequency specific (as intended). 
 %   noiseFreqWindow                 - window to use for noise removal using nt_zapline_plus. If omitted or empty, 
 %                                     detailedFreqBoundsUpper is used. Set to 0 or [0, 0] to restrict nt_zapline_plus 
 %                                     to the precise frequency.
 %   nHarmonics                      - maximum number of higher harmonics to take into account. Default = +Inf (=all), minimum = 1
+%   harmonics                       - specific list of harmonics to take into account
+%   biasfreq:                       - list of bias frequencies to take into account in nt_bias_fft. this allows for the spatial filtering 
+%                                     to also take into account power at frequencies apart from noisefreq and harmonics.
+%   cancelfreq                      - frequency which should be "canceled" for smoothing (nt_smooth). Defaults to fline.
 %   nkeep                           - PCA reduction of components before removal. (default = number of channels)
 %   plotResults                     - bool if plot should be created. (default = 1)
 %   figBase                         - integer. figure number to be created and plotted in. each iteration of noisefreqs increases
@@ -83,8 +92,9 @@
 %                                       no figure exists (default = 0)
 %
 %   NOTE: When providing multiple frequencies in noisefreqs, some of the parameters can optionally be provided per
-%         frequency (i.e., as a vector): searchIndividualNoise, fixedNremove, adaptiveNremove, detectionWinsize
-%                                        and nHarmonics
+%         frequency (i.e., as a vector): searchIndividualNoise, fixedNremove, forceFreqRemove, 
+%                                        adaptiveNremove, detectionWinsize
+%                                        nHarmonics, harmonics (cell array), biasfreq (cell array)
 %   
 %
 % Outputs:
@@ -164,6 +174,7 @@ addRequired(p, 'data', @(x) validateattributes(x,{'numeric'},{'2d'},'clean_EEG_w
 addRequired(p, 'srate', @(x) validateattributes(x,{'numeric'},{'positive','scalar','integer'},'clean_EEG_with_zapline','srate'))
 addOptional(p, 'noisefreqs', [])%, @(x) validateattributes(x,{'numeric','char'},{},'clean_EEG_with_zapline','noisefreqs')) % for some reason i cant make 'char' work here, it leads to errors in the other parameters
 addOptional(p, 'fixedNremove', 1, @(x) validateattributes(x,{'numeric'},{'integer','vector'},'clean_EEG_with_zapline','fixedNremove'));
+addOptional(p, 'forceFreqRemove', 1, @(x) validateattributes(x,{'numeric'},{'integer','vector'},'clean_EEG_with_zapline','fixedNremove'));
 addOptional(p, 'minfreq', 17, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','minfreq'))
 addOptional(p, 'maxfreq', 99, @(x) validateattributes(x,{'numeric'},{'positive','scalar'},'clean_EEG_with_zapline','maxfreq'))
 addOptional(p, 'detectionWinsize', 6, @(x) validateattributes(x,{'numeric'},{'positive','vector'},'clean_EEG_with_zapline','detectionWinsize'))
@@ -197,23 +208,34 @@ addOptional(p, 'chunkIndices', [], @(x) validateattributes(x,{'numeric'},{'2d'},
 addOptional(p, 'noiseFreqWindow', [], @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','noiseFreqWindow'));
 addOptional(p, 'minNoiseDelta', 0, @(x) validateattributes(x,{'numeric'},{'scalar', 'positive'},'clean_EEG_with_zapline','minNoiseDelta'));
 addOptional(p, 'nHarmonics', Inf, @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','nHarmonics'));
-
+addOptional(p, 'checkSpectrumReference', 'raw', @(x) any(strcmpi(x, {'raw', 'cleaned'} )));
+addOptional(p, 'harmonics', [], @(x) validateattributes(x,{'numeric'},{'vector'},'clean_EEG_with_zapline','harmonics'));
+addOptional(p, 'biasfreq', []);
+addOptional(p, 'cancelfreq', []);
 
 % parse the input
 parse(p,data,srate,varargin{:});
 
 pars = p.Results;
 
-% turn some scalars into vectors
+% turn some scalars into vectors or cell arrays
 n_freqs = length(pars.noisefreqs);
 if n_freqs > 1
-    scal2vect = {'searchIndividualNoise', 'fixedNremove', 'adaptiveNremove', 'detectionWinsize', 'nHarmonics'};
+    scal2vect = {'searchIndividualNoise', 'fixedNremove', 'forceFreqRemove', 'adaptiveNremove', 'detectionWinsize', 'nHarmonics'};
     for k = 1:length(scal2vect)
         vn = scal2vect{k};
         if isscalar(pars.(vn))
             pars.(vn) = repmat(pars.(vn), [1, n_freqs]);
         end
     end
+    vect2cell = {'harmonics','biasfreq', 'cancelfreq'};
+    for k = 1:length(vect2cell)
+        vn = vect2cell{k};
+        if ~iscell(pars.(vn))
+            pars.(vn) = repmat({pars.(vn)}, [1, n_freqs]);
+        end
+    end
+
 end
 
 data = pars.data;
@@ -299,6 +321,7 @@ zaplineConfig.adaptiveSigma = pars.adaptiveSigma;
 zaplineConfig.minSigma = pars.minsigma;
 zaplineConfig.maxSigma = pars.maxsigma;
 zaplineConfig.fixedNremove = pars.fixedNremove;
+zaplineConfig.forceFreqRemove = pars.forceFreqRemove;
 zaplineConfig.noiseCompDetectSigma = pars.noiseCompDetectSigma;
 zaplineConfig.chunkLength = chunkLength;
 zaplineConfig.winSizeCompleteSpectrum = winSizeCompleteSpectrum;
@@ -316,7 +339,11 @@ if isempty(zaplineConfig.noiseFreqWindow)
     zaplineConfig.noiseFreqWindow = zaplineConfig.detailedFreqBoundsUpper;
 end
 zaplineConfig.nHarmonics = pars.nHarmonics;
+zaplineConfig.harmonics = pars.harmonics;
+zaplineConfig.biasfreq = pars.biasfreq;
+zaplineConfig.cancelfreq = pars.cancelfreq;
 zaplineConfig.minNoiseDelta = pars.minNoiseDelta;
+zaplineConfig.checkSpectrumReference = pars.checkSpectrumReference;
 
 
 % initialize results in case no noise frequenc is found
@@ -524,7 +551,7 @@ while i_noisefreq <= length(noisefreqs)
         foundNoise = zeros(nChunks,1);
         
         for iChunk = 1:nChunks
-            
+            thisFixedNremove = fixedNremove(i_noisefreq);
             this_zaplineConfig_chunk = thisZaplineConfig;
             
             if mod(iChunk,round(nChunks/10))==0
@@ -602,7 +629,9 @@ while i_noisefreq <= length(noisefreqs)
                     % detector), but use overall noisefreq
                     noisePeaks(iChunk) = noisefreq;
                     
-                    this_zaplineConfig_chunk.adaptiveNremove = 0;
+                    if (~ zaplineConfig.forceFreqRemove(i_noisefreq))
+                      this_zaplineConfig_chunk.adaptiveNremove = 0; %JV double-check!
+                    end
                     
                 end
                 
@@ -610,12 +639,22 @@ while i_noisefreq <= length(noisefreqs)
                 noisePeaks(iChunk) = noisefreq;
             end
             
+            if fixedNremove(i_noisefreq) ==0 && (~ foundNoise(iChunk)) && (~ zaplineConfig.forceFreqRemove(i_noisefreq))
+                thisFixedNremove = 0;
+                NremoveFinal(iChunk) = 0;
+            end
+
+
             % needs to be normalized for zapline
             f_noise = noisePeaks(iChunk)/srate;
             
             % apply Zapline
             this_zaplineConfig_chunk.noiseFreqWindow =  this_zaplineConfig_chunk.noiseFreqWindow / srate;
             this_zaplineConfig_chunk.nHarmonics =  this_zaplineConfig_chunk.nHarmonics(i_noisefreq);
+            this_zaplineConfig_chunk.harmonics =  this_zaplineConfig_chunk.harmonics{i_noisefreq};
+            this_zaplineConfig_chunk.biasfreq =  this_zaplineConfig_chunk.biasfreq{i_noisefreq}/srate;
+            this_zaplineConfig_chunk.cancelfreq =  this_zaplineConfig_chunk.cancelfreq{i_noisefreq}/srate;
+            
             [cleanData_chunk,~,NremoveFinal(iChunk),thisScores] =...
                 nt_zapline_plus(chunk,f_noise,thisFixedNremove,this_zaplineConfig_chunk,0);
             
@@ -705,13 +744,19 @@ while i_noisefreq <= length(noisefreqs)
         thisFreqidxLowercheck = f>noisefreq+detailedFreqBoundsLower(1) & f<noisefreq+detailedFreqBoundsLower(2);
         
         thisFineData = mean(pxx_clean_log(thisFreqidx,:),2);
-        thisRawData = mean(pxx_raw_log(thisFreqidx, :),2);
+        
+        if strcmpi(zaplineConfig.checkSpectrumReference, 'cleaned')
+            thisRefData = thisFineData;  % take cleaned surrounding spectrum as reference
+        else
+            thisRefData = mean(pxx_raw_log(thisFreqidx, :),2); % take raw (uncleaned) surrounding spectrum as reference
+        end
         third = round(length(thisFineData)/3);
-        centerThisData = mean(thisFineData([1:third third*2:end]));
+        
         
         if (zaplineConfig.detrendSpectrum==0) % use original approach 
             % measure of variation in this case is only lower quantile because upper quantile can be driven by spectral outliers
-            meanLowerQuantileThisData = mean([quantile(thisFineData(1:third),0.05) quantile(thisFineData(third*2:end),0.05)]);
+            centerThisData = mean(thisRefData([1:third third*2:end]));
+            meanLowerQuantileThisData = mean([quantile(thisRefData(1:third),0.05) quantile(thisRefData(third*2:end),0.05)]);
 
             delta = freqDetectMultFine * (centerThisData - meanLowerQuantileThisData);
             delta = max(zaplineConfig.minNoiseDelta, delta);
@@ -734,13 +779,15 @@ while i_noisefreq <= length(noisefreqs)
             remove_idx_lo = remove_idx_lo(thisFreqidx);
             remove_idx_hi = remove_idx_hi(thisFreqidx);
             all_idx = 1:length(thisFineData);
-            keep_middle = all_idx([1:third, 2*third:end]);
-            p = polyfit(keep_middle', thisFineData(keep_middle),zaplineConfig.detrendSpectrum);
+            remove_middle = all_idx([1:third, 2*third:end]);
+            p = polyfit(remove_middle', thisRefData(remove_middle),zaplineConfig.detrendSpectrum); % thisFineData
             thisSmoothedData = polyval(p, all_idx');
+
             thisResidData = thisFineData - thisSmoothedData;
+            thisResidRawData = thisRefData - thisSmoothedData;
             centerThisData = mean(thisSmoothedData(third:2*third));
 
-            meanLowerQuantileThisData = centerThisData + quantile(thisResidData(keep_idx_ival),0.05);
+            meanLowerQuantileThisData = centerThisData + quantile(thisResidRawData(keep_idx_ival),0.05); % thisResidData
             delta = freqDetectMultFine * (centerThisData - meanLowerQuantileThisData);
             delta = max(zaplineConfig.minNoiseDelta, delta);
 
@@ -1009,6 +1056,11 @@ while i_noisefreq <= length(noisefreqs)
         % decide if redo cleaning (plot needs to be before because it shows incorrect sigma otherwise)
         
         cleaningDone = 1;
+
+        if fixedNremove(i_noisefreq) ==0 && (~ any(foundNoise)) && (~ zaplineConfig.forceFreqRemove(i_noisefreq))
+            continue
+        end
+
         
         if adaptiveNremove(i_noisefreq) && adaptiveSigma
             if cleaningTooStrong && thisZaplineConfig.noiseCompDetectSigma < maxSigma
